@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\OrderStatus;
 use App\Events\OrderStatusChanged;
 use App\Jobs\RefundPaymentJob;
 use App\Models\Inventory;
@@ -13,40 +14,28 @@ use Illuminate\Validation\ValidationException;
 
 class OrderStateService
 {
-    private array $allowed = [
-        'pending' => ['paid', 'canceled'],
-        'paid' => ['processing', 'canceled'],
-        'processing' => ['shipped', 'canceled'],
-        'shipped' => ['delivered'],
-        'delivered' => [],
-        'canceled' => [],
-    ];
-
     public function transition(
         Order $order,
-        string $toState,
+        OrderStatus $toState,
         ?User $user = null,
         array $metadata = []
     ): Order {
         return DB::transaction(function () use ($order, $toState, $user, $metadata) {
+            /** @var OrderStatus $fromState */
             $fromState = $order->status;
 
-            if (! $this->canTransition($fromState, $toState)) {
+            if (! $fromState->canTransitionTo($toState)) {
                 throw ValidationException::withMessages([
-                    'status' => "Invalid transition from {$fromState} to {$toState}.",
+                    'status' => "Invalid transition from {$fromState->value} to {$toState->value}.",
                 ]);
             }
 
-            if ($toState === 'processing') {
-                $reserved = $this->reserveInventory($order);
+            if ($toState === OrderStatus::Processing && ! $this->reserveInventory($order)) {
+                RefundPaymentJob::dispatch($order->id);
 
-                if (! $reserved) {
-                    RefundPaymentJob::dispatch($order->id);
-
-                    throw ValidationException::withMessages([
-                        'inventory' => 'Insufficient inventory. Refund initiated.',
-                    ]);
-                }
+                throw ValidationException::withMessages([
+                    'inventory' => 'Insufficient inventory. Refund initiated.',
+                ]);
             }
 
             $order->update([
@@ -56,8 +45,8 @@ class OrderStateService
             OrderAudit::create([
                 'order_id' => $order->id,
                 'business_id' => $order->business_id,
-                'from_state' => $fromState,
-                'to_state' => $toState,
+                'from_state' => $fromState->value,
+                'to_state' => $toState->value,
                 'user_id' => $user?->id,
                 'metadata' => $metadata,
             ]);
@@ -66,15 +55,6 @@ class OrderStateService
 
             return $order->refresh();
         });
-    }
-
-    private function canTransition(string $from, string $to): bool
-    {
-        if ($to === 'canceled' && ! in_array($from, ['delivered', 'canceled'])) {
-            return true;
-        }
-
-        return in_array($to, $this->allowed[$from] ?? []);
     }
 
     private function reserveInventory(Order $order): bool

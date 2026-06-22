@@ -80,10 +80,12 @@ class DashboardAnalyticsService
                 DB::raw('SUM(order_items.quantity) as total_quantity'),
             ]);
 
+        $hourExpression = $this->hourBucketExpression();
+
         $hourlyVelocity = DB::table('orders')
             ->where('business_id', $businessId)
             ->where('created_at', '>=', $from24Hours)
-            ->selectRaw('DATE_FORMAT(created_at, "%Y-%m-%d %H:00:00") as hour, COUNT(*) as total_orders')
+            ->selectRaw("{$hourExpression} as hour, COUNT(*) as total_orders")
             ->groupBy('hour')
             ->orderBy('hour')
             ->get();
@@ -110,6 +112,15 @@ class DashboardAnalyticsService
             ->put($this->cacheKey($businessId), $payload, now()->addHour());
 
         return $payload;
+    }
+
+    private function hourBucketExpression(): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y-%m-%d %H:00:00', created_at)",
+            'pgsql' => "to_char(date_trunc('hour', created_at), 'YYYY-MM-DD HH24:00:00')",
+            default => "DATE_FORMAT(created_at, '%Y-%m-%d %H:00:00')",
+        };
     }
 
     private function cacheKey(int $businessId): string

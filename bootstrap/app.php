@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        // Payment provider webhooks are server-to-server and carry no CSRF token.
+        $middleware->validateCsrfTokens(except: [
+            'webhooks/payment',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

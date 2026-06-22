@@ -13,8 +13,8 @@ class LogOrderNotificationListener implements ShouldQueue
         Log::info('ORDER STATUS CHANGED', [
             'order_id' => $event->order->id,
             'business_id' => $event->order->business_id,
-            'from' => $event->fromState,
-            'to' => $event->toState,
+            'from' => $event->fromState->value,
+            'to' => $event->toState->value,
         ]);
     }
 }

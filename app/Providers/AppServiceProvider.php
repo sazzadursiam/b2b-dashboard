@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Support\CurrentBusiness;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -14,7 +15,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // One instance per request lifecycle; reset between requests/jobs.
+        $this->app->scoped(CurrentBusiness::class);
     }
 
     /**

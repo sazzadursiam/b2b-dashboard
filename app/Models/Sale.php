@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Jobs\RefreshAnalyticsCache;
+use App\Models\Concerns\BelongsToBusiness;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Sale extends Model
 {
+    use BelongsToBusiness, HasFactory;
+
     protected $fillable = [
         'business_id',
         'order_id',
